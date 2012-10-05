@@ -22,6 +22,7 @@ from webapp2_extras.appengine.auth.models import Unique
 from google.appengine.api import taskqueue
 from linkedin import linkedin
 
+
 # local application/library specific imports
 import config, models
 import forms as forms
@@ -266,8 +267,8 @@ class CallbackSocialLoginHandler(BaseHandler):
             oauth_token = self.request.get('oauth_token')
             oauth_verifier = self.request.get('oauth_verifier')
             twitter_helper = twitter.TwitterAuth(self)
-            user_data = twitter_helper.auth_complete(oauth_token,
-                oauth_verifier)
+            user_data = twitter_helper.auth_complete(oauth_token, oauth_verifier)
+
             if self.user:
                 # new association with twitter
                 user_info = models.User.get_by_id(long(self.user_id))
@@ -303,13 +304,39 @@ class CallbackSocialLoginHandler(BaseHandler):
                     logVisit.put()
                     self.redirect_to('home')
                 else:
-                    # Social user does not exists. Need show login and registration forms
-                    twitter_helper.save_association_data(user_data)
-                    message = _('This Twitter account is not associated with any local account. '
-                                'If you already have a %s Account, you have <a href="/login/">sign in here</a> '
-                                'or <a href="/register/">create an account</a>.' % config.app_name)
-                    self.add_message(message, 'warning')
-                    self.redirect_to('login')
+                    username = user_data['screen_name'].lower()
+                    name = user_data['name']
+                    email = ''
+                    password = ''
+
+                    unique_properties = ['username']
+                    auth_id = "own:%s" % username
+
+                    user = self.auth.store.user_model.create_user(
+                        auth_id, unique_properties, password_raw=password,
+                        username=username, name=name, email=email,
+                        ip=self.request.remote_addr
+                    )
+
+                    if user:
+                        user_info = models.User.get_by_auth_id(auth_id)
+                        if models.SocialUser.check_unique(user_info.key, 'twitter', str(user_data['id'])):
+                            social_user = models.SocialUser(
+                                user = user_info.key,
+                                provider = 'twitter',
+                                uid = str(user_data['id']),
+                                extra_data = user_data
+                            )
+                            social_user.put()
+                            token = models.User.create_auth_token(user_info.get_id())
+                            user_id = user_info.get_id()
+                            self.auth.get_user_by_token(int(user_id), token) ###### error qlo ######
+                            # Delete token
+                            models.User.delete_auth_token(user_id, token)
+
+                    message = _('Exito...')
+                    self.add_message(message, 'success')
+                    self.redirect_to('home')
 
         #facebook association
         elif provider_name == "facebook":
