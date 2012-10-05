@@ -22,19 +22,19 @@ class TwitterAuth(object):
     AUTH_BACKEND_NAME = 'twitter'
     SETTINGS_KEY_NAME = 'TWITTER_CONSUMER_KEY'
     SETTINGS_SECRET_NAME = 'TWITTER_CONSUMER_SECRET'
-    
+
     def __init__(self, request, redirect_uri=None):
         """Init method"""
         self.request = request
         self.redirect_uri = redirect_uri
-    
+
     def auth_url(self):
         """Return redirect url"""
         token = self.unauthorized_token()
         name = self.AUTH_BACKEND_NAME + 'unauthorized_token_name'
         self.request.session[name] = token.to_string()
         return str(self.oauth_request(token, self.AUTHORIZATION_URL).to_url())
-    
+
     def auth_complete(self, oauth_token, oauth_verifier):
         """Return user, might be logged in"""
         name = self.AUTH_BACKEND_NAME + 'unauthorized_token_name'
@@ -48,14 +48,14 @@ class TwitterAuth(object):
             raise ValueError('Incorrect tokens')
 
         access_token = self.access_token(token, oauth_verifier)
-        
+
         data = self.user_data(access_token)
         return data
-    
+
     def save_association_data(self, user_data):
         name = self.AUTH_BACKEND_NAME + 'association_data'
         self.request.session[name] = json.dumps(user_data)
-        
+
     def get_association_data(self):
         name = self.AUTH_BACKEND_NAME + 'association_data'
         if name in self.request.session:
@@ -64,13 +64,13 @@ class TwitterAuth(object):
         else:
             association_data = None
         return association_data
-    
+
     def unauthorized_token(self):
         """Return request for unauthorized token (first stage)"""
         request = self.oauth_request(token=None, url=self.REQUEST_TOKEN_URL)
         response = self.fetch_response(request)
         return Token.from_string(response)
-    
+
     def oauth_request(self, token, url, oauth_verifier=None, extra_params=None):
         """Generate OAuth request, setups callback url"""
         params = {}
@@ -87,26 +87,27 @@ class TwitterAuth(object):
                                                        parameters=params)
         request.sign_request(SignatureMethod_HMAC_SHA1(), self.consumer, token)
         return request
-    
+
     def fetch_response(self, request):
         """Executes request and fetchs service response"""
         response = urlopen(request.to_url())
         return '\n'.join(response.readlines())
-    
+
     def access_token(self, token, oauth_verifier):
         """Return request for access token value"""
         request = self.oauth_request(token, self.ACCESS_TOKEN_URL, oauth_verifier)
         return Token.from_string(self.fetch_response(request))
-    
+
     def user_data(self, access_token):
         """Return user data provided"""
-        request = self.oauth_request(access_token, TWITTER_CHECK_AUTH)
-        json = self.fetch_response(request)
+        request  = self.oauth_request(access_token, TWITTER_CHECK_AUTH)
+        response = self.fetch_response(request)
+
         try:
-            return json.loads(json)
+            return json.loads(response)
         except ValueError:
             return None
-    
+
     @property
     def consumer(self):
         """Setups consumer"""
